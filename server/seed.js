@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs'
+import crypto from 'node:crypto'
 import db from './db.js'
 
 /**
@@ -8,24 +9,48 @@ import db from './db.js'
  */
 async function ensureUser(username, email, password) {
   const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email)
-  if (existing) return existing.id
+  if (existing) return { id: existing.id, created: false }
   const hash = await bcrypt.hash(password, 10)
   const info = db
     .prepare(
       'INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)'
     )
     .run(username, email, hash)
-  return Number(info.lastInsertRowid)
+  return { id: Number(info.lastInsertRowid), created: true }
+}
+
+function seedPassword(envName) {
+  const configured = process.env[envName]?.trim()
+  if (configured) return { value: configured, generated: false }
+
+  return {
+    value: crypto.randomBytes(18).toString('base64url'),
+    generated: true,
+  }
 }
 
 async function main() {
-  const demoId = await ensureUser('demo', 'demo@routeflow.ng', 'password123')
-  const adaId = await ensureUser('ada_ogun', 'ada@routeflow.ng', 'password123')
+  const demoPassword = seedPassword('SEED_DEMO_PASSWORD')
+  const adaPassword = seedPassword('SEED_ADA_PASSWORD')
+  const demo = await ensureUser('demo', 'demo@routeflow.ng', demoPassword.value)
+  const ada = await ensureUser('ada_ogun', 'ada@routeflow.ng', adaPassword.value)
+  const demoId = demo.id
+  const adaId = ada.id
+
+  const generatedCredentials = []
+  if (demo.created && demoPassword.generated) {
+    generatedCredentials.push(`demo@routeflow.ng / ${demoPassword.value}`)
+  }
+  if (ada.created && adaPassword.generated) {
+    generatedCredentials.push(`ada@routeflow.ng / ${adaPassword.value}`)
+  }
 
   const count = db.prepare('SELECT COUNT(*) AS n FROM reports').get().n
   if (count > 0) {
     console.log(`[seed] reports already present (${count}); skipping hint seed.`)
-    console.log('[seed] Demo login -> email: demo@routeflow.ng  password: password123')
+    if (generatedCredentials.length) {
+      console.log(`[seed] Generated seed credentials: ${generatedCredentials.join(', ')}`)
+    }
     return
   }
 
@@ -100,7 +125,9 @@ async function main() {
   vote.run(ids[4], demoId, 'confirm') // confirms the flooded Sagamu–Ore road
 
   console.log(`[seed] inserted ${ids.length} hints across Ogun State corridors.`)
-  console.log('[seed] Demo login -> email: demo@routeflow.ng  password: password123')
+  if (generatedCredentials.length) {
+    console.log(`[seed] Generated seed credentials: ${generatedCredentials.join(', ')}`)
+  }
 }
 
 main()

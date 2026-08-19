@@ -87,8 +87,9 @@ npm run dev
 
 When the development server starts, open the URL printed by Vite.
 
-The seed command creates a demo account for local testing. Change the seeded
-credentials before sharing a deployed instance.
+The seed command creates local test accounts. Set `SEED_DEMO_PASSWORD` and
+`SEED_ADA_PASSWORD` in `.env` to choose their credentials, or leave them empty
+to generate random passwords that are printed once when the accounts are created.
 
 ### Production (single server)
 
