@@ -35,6 +35,33 @@ OSRM routing, Nominatim search).
 - **Auth:** `bcryptjs`, `jsonwebtoken`, httpOnly cookie
 - **Geo:** OSRM (routing), Nominatim (geocoding), `@turf/turf` (route/hint matching)
 
+## Routing and traffic engine
+
+- **Ogun geocoding:** Search and reverse-geocoding requests pass through the
+  Express API. Results are bounded to Ogun State, normalized into readable
+  addresses, areas, and road names, cached, and rate-controlled before reaching
+  Nominatim.
+- **Candidate route generation:** OSRM supplies route geometry, distance, base
+  duration, turn steps, and named roads. When a corridor is reported blocked,
+  Route-Flow also probes detour points on both sides of the affected road to
+  discover usable secondary routes.
+- **Traffic intelligence:** Turf spatial matching associates recent community
+  reports and anonymous speed telemetry with nearby route segments. Fresh,
+  corroborated reports have more influence, while stale or disputed reports
+  lose confidence over time.
+- **ETA adjustment:** Each candidate starts with OSRM's base duration. Observed
+  slow speeds and credible congestion reports add a calculated delay so route
+  comparisons reflect current road conditions rather than distance alone.
+- **Route recommendation:** The engine keeps the normal route when a detour does
+  not save meaningful time. It recommends an alternative only when the adjusted
+  ETA shows a real saving or the normal route has a credible blockage.
+- **Live navigation:** High-accuracy browser GPS updates the start point,
+  rejects stale or implausible jumps, reverse-geocodes the current address, and
+  periodically recalculates the trip as the driver moves.
+- **Map rendering:** Leaflet draws the OpenStreetMap road network as the base
+  layer, highlights route alternatives, and displays the selected route,
+  distance, ETA, addresses, and road names.
+
 ## Prerequisites
 
 - **Node.js ≥ 18** (tested on Node 22). Check with `node --version`.
@@ -58,15 +85,16 @@ npm run seed
 npm run dev
 ```
 
-Then open **http://localhost:5173**.
+When the development server starts, open the URL printed by Vite.
 
-**Demo login:** `demo@routeflow.ng` / `password123`
+The seed command creates a demo account for local testing. Change the seeded
+credentials before sharing a deployed instance.
 
 ### Production (single server)
 
 ```bash
 npm run build     # builds the client into client/dist
-npm start         # Express serves the API + built app on http://localhost:3000
+npm start         # Express serves the API and built app on the configured PORT
 ```
 
 ## How to use
@@ -110,9 +138,3 @@ client/            React app (Vite)
   intelligence comes from community hints + OSRM base travel times, by design.
 - Blocked hints influence routing for **24 hours** and fade once the community
   disputes them more than they confirm.
-
-## Security
-
-- Passwords are hashed with **bcrypt** (`bcryptjs`) — never stored in plaintext.
-- Sessions use a **signed JWT** in an **httpOnly, SameSite=Lax** cookie.
-- **Set a strong `JWT_SECRET`** in `.env` before deploying.
